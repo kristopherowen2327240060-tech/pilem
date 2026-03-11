@@ -5,16 +5,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class DetailScreen extends StatefulWidget {
   final Movie movie;
-
-  const DetailScreen({super.key, required this.movie});
-
+  final VoidCallback? onFavoriteChanged;
+  const DetailScreen({super.key, required this.movie, this.onFavoriteChanged});
   @override
-  State<DetailScreen> createState() => DetailScreenState();
+  State<DetailScreen> createState() => _DetailScreenState();
 }
 
-class DetailScreenState extends State<DetailScreen> {
-  bool isFavorite = false;
-
+class _DetailScreenState extends State<DetailScreen> {
+  bool _isFavorite = false;
   @override
   void initState() {
     super.initState();
@@ -24,30 +22,36 @@ class DetailScreenState extends State<DetailScreen> {
   Future<void> _checkIsFavorite() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      isFavorite = prefs.containsKey('movie_${widget.movie.id}');
+      _isFavorite = prefs.containsKey('movie_${widget.movie.id}');
     });
   }
 
   Future<void> _toggleFavorite() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      isFavorite = !isFavorite;
+      _isFavorite = !_isFavorite;
     });
-
-    if (isFavorite) {
+    if (_isFavorite) {
       final String movieJson = jsonEncode(widget.movie.toJson());
-      await prefs.setString('movie_${widget.movie.id}', movieJson);
+      prefs.setString('movie_${widget.movie.id}', movieJson);
+      List<String> favoriteMovieIds =
+          prefs.getStringList('favoriteMovies') ?? [];
+      favoriteMovieIds.add(widget.movie.id.toString());
+      prefs.setStringList('favoriteMovies', favoriteMovieIds);
     } else {
-      await prefs.remove('movie_${widget.movie.id}');
+      prefs.remove('movie_${widget.movie.id}');
+      List<String> favoriteMovieIds =
+          prefs.getStringList('favoriteMovies') ?? [];
+      favoriteMovieIds.remove(widget.movie.id.toString());
+      prefs.setStringList('favoriteMovies', favoriteMovieIds);
     }
+    widget.onFavoriteChanged?.call();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.movie.title),
-      ),
+      appBar: AppBar(title: Text(widget.movie.title)),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: SingleChildScrollView(
@@ -56,18 +60,35 @@ class DetailScreenState extends State<DetailScreen> {
             children: [
               Stack(
                 children: [
-                  Image.network(
-                    'https://image.tmdb.org/t/p/w500${widget.movie.backdropPath}',
-                    height: 300,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+                  widget.movie.backdropPath.isNotEmpty
+                      ? Image.network(
+                          'https://image.tmdb.org/t/p/w500${widget.movie.backdropPath}',
+                          height: 300,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 300,
+                              color: Colors.grey,
+                              child: const Center(
+                                child: Icon(Icons.movie, size: 50),
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          height: 300,
+                          color: Colors.grey,
+                          child: const Center(
+                            child: Icon(Icons.movie, size: 50),
+                          ),
+                        ),
                   Positioned(
                     bottom: 8,
                     right: 8,
                     child: IconButton(
                       icon: Icon(
-                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                        _isFavorite ? Icons.favorite : Icons.favorite_border,
                         color: Colors.red,
                       ),
                       onPressed: _toggleFavorite,
